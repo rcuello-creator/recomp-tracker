@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f9fafb;
+}
+
+/* Disable pull-to-refresh on iOS PWA */
+html, body {
+  overscroll-behavior-y: contain;
+}
+
+/* Tab numbers (monospace digits) */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Safe area insets for iPhone notch / home indicator */
+@supports (padding: max(0px)) {
+  .safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+  }
+}

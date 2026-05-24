@@ -1,0 +1,335 @@
+// ============================================================
+// Recomp Tracker — Google Apps Script Backend
+// ============================================================
+// Deploy as Web App:
+//   - Execute as: Me
+//   - Who has access: Anyone
+// 
+// Replace SECRET and SHEET_ID below before deploying.
+// ============================================================
+
+const SECRET = 'CHANGE_ME_32_CHARS_RANDOM_STRING';
+const SHEET_ID = 'CHANGE_ME_SHEET_ID_FROM_URL';
+
+// ============================================================
+// ENTRY POINTS
+// ============================================================
+
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents);
+    
+    if (body.secret !== SECRET) {
+      return jsonResponse({ error: 'Unauthorized' }, 401);
+    }
+    
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    
+    switch (body.action) {
+      case 'saveLog': return jsonResponse(saveLog(ss, body.data));
+      case 'saveScan': return jsonResponse(saveScan(ss, body.data));
+      case 'saveLift': return jsonResponse(saveLift(ss, body.data));
+      case 'saveDexa': return jsonResponse(saveDexa(ss, body.data));
+      case 'updateSettings': return jsonResponse(updateSettings(ss, body.data));
+      case 'getHistory': return jsonResponse(getHistory(ss));
+      case 'syncBatch': return jsonResponse(syncBatch(ss, body.data));
+      default: return jsonResponse({ error: 'Unknown action' }, 400);
+    }
+  } catch (err) {
+    return jsonResponse({ error: err.toString() }, 500);
+  }
+}
+
+function doGet(e) {
+  try {
+    if (e.parameter.secret !== SECRET) {
+      return jsonResponse({ error: 'Unauthorized' }, 401);
+    }
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    return jsonResponse(getHistory(ss));
+  } catch (err) {
+    return jsonResponse({ error: err.toString() }, 500);
+  }
+}
+
+function jsonResponse(data, statusCode = 200) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ============================================================
+// WRITE ACTIONS
+// ============================================================
+
+function saveLog(ss, data) {
+  const sheet = ss.getSheetByName('DailyLogs');
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  const dateCol = headers.indexOf('date');
+  const updatedAtCol = headers.indexOf('updatedAt');
+  
+  // Find existing row by date
+  let rowIndex = -1;
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][dateCol] === data.date) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+  
+  const row = headers.map(h => {
+    if (h === 'updatedAt') return new Date().toISOString();
+    if (data[h] === undefined || data[h] === null) return '';
+    return data[h];
+  });
+  
+  if (rowIndex > 0) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  } else {
+    sheet.appendRow(row);
+  }
+  
+  return { success: true, date: data.date };
+}
+
+function saveScan(ss, data) {
+  const sheet = ss.getSheetByName('StarfitScans');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  const row = headers.map(h => {
+    if (h === 'createdAt') return new Date().toISOString();
+    if (data[h] === undefined || data[h] === null) return '';
+    return data[h];
+  });
+  
+  sheet.appendRow(row);
+  return { success: true, scan: data };
+}
+
+function saveLift(ss, data) {
+  const sheet = ss.getSheetByName('Lifts');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  const row = headers.map(h => {
+    if (h === 'createdAt') return new Date().toISOString();
+    if (data[h] === undefined || data[h] === null) return '';
+    return data[h];
+  });
+  
+  sheet.appendRow(row);
+  return { success: true, lift: data };
+}
+
+function saveDexa(ss, data) {
+  const sheet = ss.getSheetByName('DexaScans');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  const row = headers.map(h => {
+    if (h === 'createdAt') return new Date().toISOString();
+    if (data[h] === undefined || data[h] === null) return '';
+    return data[h];
+  });
+  
+  sheet.appendRow(row);
+  return { success: true, dexa: data };
+}
+
+function updateSettings(ss, data) {
+  const sheet = ss.getSheetByName('Settings');
+  const values = sheet.getDataRange().getValues();
+  const now = new Date().toISOString();
+  
+  Object.entries(data).forEach(([key, value]) => {
+    let found = false;
+    for (let i = 1; i < values.length; i++) {
+      if (values[i][0] === key) {
+        sheet.getRange(i + 1, 2).setValue(value);
+        sheet.getRange(i + 1, 3).setValue(now);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      sheet.appendRow([key, value, now]);
+    }
+  });
+  
+  return { success: true, updated: Object.keys(data) };
+}
+
+function syncBatch(ss, batch) {
+  // Process multiple offline-queued operations in one request
+  const results = [];
+  batch.forEach(op => {
+    try {
+      switch (op.action) {
+        case 'saveLog': results.push(saveLog(ss, op.data)); break;
+        case 'saveScan': results.push(saveScan(ss, op.data)); break;
+        case 'saveLift': results.push(saveLift(ss, op.data)); break;
+        case 'updateSettings': results.push(updateSettings(ss, op.data)); break;
+      }
+    } catch (e) {
+      results.push({ error: e.toString(), op });
+    }
+  });
+  return { success: true, results };
+}
+
+// ============================================================
+// READ
+// ============================================================
+
+function getHistory(ss) {
+  return {
+    logs: sheetToObjects(ss.getSheetByName('DailyLogs')),
+    scans: sheetToObjects(ss.getSheetByName('StarfitScans')),
+    lifts: sheetToObjects(ss.getSheetByName('Lifts')),
+    dexas: sheetToObjects(ss.getSheetByName('DexaScans')),
+    settings: settingsToObject(ss.getSheetByName('Settings')),
+    phases: sheetToObjects(ss.getSheetByName('Phases')),
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+function sheetToObjects(sheet) {
+  if (!sheet) return [];
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return [];
+  const headers = values[0];
+  return values.slice(1)
+    .filter(row => row.some(cell => cell !== '' && cell !== null))
+    .map(row => {
+      const obj = {};
+      headers.forEach((h, i) => {
+        let v = row[i];
+        // Normalize dates to YYYY-MM-DD if Date object
+        if (v instanceof Date) {
+          v = Utilities.formatDate(v, 'GMT', "yyyy-MM-dd");
+        }
+        obj[h] = v;
+      });
+      return obj;
+    });
+}
+
+function settingsToObject(sheet) {
+  if (!sheet) return {};
+  const values = sheet.getDataRange().getValues();
+  const result = {};
+  for (let i = 1; i < values.length; i++) {
+    const [key, value] = values[i];
+    if (key) {
+      // Parse booleans
+      if (value === 'TRUE' || value === true) result[key] = true;
+      else if (value === 'FALSE' || value === false) result[key] = false;
+      else result[key] = value;
+    }
+  }
+  return result;
+}
+
+// ============================================================
+// INITIALIZATION — Run once from Apps Script editor
+// ============================================================
+
+function initializeSheet() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  
+  const schemas = {
+    'DailyLogs': ['date','calories','protein','carbs','fat','liftDone','liftVolume','sleep','alcohol','steps','creatine','notes','adherenceScore','updatedAt'],
+    'StarfitScans': ['date','weight','bodyFat','leanMass','fatMass','bodyScore','bodyWater','visceralFat','bmr','context','createdAt'],
+    'Lifts': ['date','coach','session','type','volume','duration','avgBpm','calories','notes','flag','createdAt'],
+    'DexaScans': ['date','weight','leanMass','fatMass','bodyFat','bmr','visceralFat','almi','ffmi','tScore','bmc','facility','notes','createdAt'],
+    'Settings': ['key','value','updatedAt'],
+    'Phases': ['id','name','startDate','endDate','calories','protein','carbs','fat','refeedCal','description'],
+  };
+  
+  Object.entries(schemas).forEach(([name, headers]) => {
+    let sheet = ss.getSheetByName(name);
+    if (!sheet) sheet = ss.insertSheet(name);
+    sheet.clear();
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#f3f4f6');
+  });
+  
+  Logger.log('Sheets initialized');
+}
+
+function seedInitialData() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const now = new Date().toISOString();
+  
+  // DEXA baseline
+  ss.getSheetByName('DexaScans').appendRow([
+    '2026-04-10', 222.8, 147.8, 69.0, 30.8, 1818, 0.62, 9.2, 21.5, 0.20, 6.25,
+    'BodySpec Weston', 'Baseline scan', now
+  ]);
+  
+  // Starfit history
+  const scans = [
+    ['2026-05-02', 225.2, 35.1, 146.2, 79.0, 65, 107.2, 15, 1786, 'Pre-crucero baseline'],
+    ['2026-05-09', 224.4, 35.6, 144.5, 79.9, 64, 105.9, 15, 1789, 'Post-crucero dehydrated'],
+    ['2026-05-10', 224.6, 35.5, 144.9, 79.7, 65, 106.2, 15, 1790, 'Recovery day'],
+    ['2026-05-16', 224.8, 36.7, 142.3, 82.5, 62, 104.3, 16, 1761, 'Post-CKO2 sin creatina 7d'],
+    ['2026-05-17', 223.4, 35.9, 143.2, 80.2, 63, 105.0, 15, 1772, 'Post-baño AM fasted · Baseline Fase 1'],
+  ];
+  scans.forEach(s => ss.getSheetByName('StarfitScans').appendRow([...s, now]));
+  
+  // Lifts
+  const lifts = [
+    ['2026-04-29', 'Dylon', 'Legs PR', 'Legs', 5240, 60, '', '', 'PR all-time piernas', 'pr'],
+    ['2026-05-03', 'Dylon', 'Finish-Line Fri', 'Mixed', 2160, '', '', '', 'Crucero día 2', ''],
+    ['2026-05-04', 'Josiah', 'Functional', 'Functional', 2130, '', '', '', 'Crucero día 3', ''],
+    ['2026-05-06', 'Dylon', 'Legs', 'Legs', 4945, '', '', '', 'PR crucero 94% del all-time', 'pr'],
+    ['2026-05-08', 'Dylon', 'Flex Friday', 'Upper', 1030, 68, 107, 419, 'Último día crucero', ''],
+    ['2026-05-11', 'Dylon', '#33', 'Mixed', 1799, 107, 109, 665, 'Pre-vuelo LAX', ''],
+    ['2026-05-13', 'Dylon', '#34 Glutes', 'Legs', 4390, 66, 114, 439, 'Hotel LAX RDL dolor lumbar set incompleto', 'injury'],
+    ['2026-05-17', 'Dylon', '#35 Finish-Line Fri', 'Mixed', 2295, 79, 119, 549, 'Zone 2 dominante 46% · Post-CKO2 recovery', ''],
+  ];
+  lifts.forEach(l => ss.getSheetByName('Lifts').appendRow([...l, now]));
+  
+  // Phases
+  const phases = [
+    [1, 'Reset', '2026-05-18', '2026-06-14', 2400, 200, 240, 65, 2800, 'Restart post-CKO2'],
+    [2, 'Cut Sostenido', '2026-06-15', '2026-07-31', 2300, 210, 220, 60, 2700, 'Pre-panel hormonal agosto'],
+    [3, 'Carb Cycling', '2026-08-01', '2026-10-31', 2330, 200, 220, 60, 2700, 'Ciclado optimizar performance'],
+    [4, 'Final Cut', '2026-11-01', '2027-02-28', 2100, 220, 180, 50, 2500, 'Déficit agresivo'],
+    [5, 'Lean Phase', '2027-03-01', '2027-08-31', 2000, 220, 160, 50, 2400, 'Último tramo a 180 lbs 12% BF'],
+  ];
+  phases.forEach(p => ss.getSheetByName('Phases').appendRow(p));
+  
+  // Settings
+  const settings = [
+    ['travelMode', false],
+    ['injuryActive', true],
+    ['physioBooked', false],
+    ['currentPhase', 1],
+    ['nextDexaDate', '2026-07-10'],
+    ['nextStarfitDate', '2026-05-23'],
+  ];
+  settings.forEach(s => ss.getSheetByName('Settings').appendRow([...s, now]));
+  
+  Logger.log('Initial data seeded');
+}
+
+// ============================================================
+// MAINTENANCE
+// ============================================================
+
+function generateSecret() {
+  // Run from editor to get a random 32-char secret
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let secret = '';
+  for (let i = 0; i < 32; i++) {
+    secret += chars[Math.floor(Math.random() * chars.length)];
+  }
+  Logger.log('New secret: ' + secret);
+  return secret;
+}
+
+function weeklyDigest() {
+  // Trigger this Monday 7am via Apps Script trigger
+  // TODO: send email summary of last week
+}

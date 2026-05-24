@@ -1,0 +1,119 @@
+// ============================================================
+// Helpers
+// ============================================================
+
+import { PHASES } from '../data/phases';
+import { SCORE_WEIGHTS, BMR_KATCH_MCARDLE, TEF_PERCENT } from '../data/constants';
+
+export const today = () => new Date().toISOString().split('T')[0];
+
+export const daysBetween = (d1, d2) => {
+  const date1 = new Date(d1 + 'T00:00:00');
+  const date2 = new Date(d2 + 'T00:00:00');
+  return Math.round((date2 - date1) / (1000 * 60 * 60 * 24));
+};
+
+export const formatDate = (dateStr) => {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+};
+
+export const formatDateLong = (dateStr) => {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+};
+
+export const getCurrentPhase = (date = today()) => {
+  return PHASES.find(p => date >= p.startDate && date <= p.endDate) || PHASES[0];
+};
+
+export const getTodayTargets = (travelMode = false, date = today()) => {
+  const phase = getCurrentPhase(date);
+  if (travelMode) {
+    return { calories: 2500, protein: 200, carbs: phase.carbs, fat: 85, mode: 'travel', phase: phase.name };
+  }
+  const isSaturday = new Date(date + 'T00:00:00').getDay() === 6;
+  return {
+    calories: isSaturday ? phase.refeedCal : phase.calories,
+    protein: phase.protein,
+    carbs: isSaturday ? Math.round(phase.carbs * 1.4) : phase.carbs,
+    fat: phase.fat,
+    mode: isSaturday ? 'refeed' : 'normal',
+    phase: phase.name,
+  };
+};
+
+export const calculateTDEE = (activeCal, caloriesConsumed) => {
+  const active = activeCal || 0;
+  const tef = (caloriesConsumed || 0) * TEF_PERCENT;
+  return Math.round(BMR_KATCH_MCARDLE + active + tef);
+};
+
+export const calculateDeficit = (caloriesConsumed, activeCal) => {
+  if (!caloriesConsumed && !activeCal) return null;
+  const tdee = calculateTDEE(activeCal, caloriesConsumed);
+  return (caloriesConsumed || 0) - tdee;
+};
+
+export const calculateScore = (log, targets) => {
+  if (!log) return 0;
+  let score = 0;
+  let max = 0;
+  
+  max += SCORE_WEIGHTS.protein;
+  if (log.protein >= targets.protein) score += SCORE_WEIGHTS.protein;
+  else if (log.protein >= targets.protein - 20) score += SCORE_WEIGHTS.protein * 0.7;
+  else if (log.protein >= targets.protein - 40) score += SCORE_WEIGHTS.protein * 0.35;
+  
+  max += SCORE_WEIGHTS.calories;
+  const calDiff = Math.abs((log.calories || 0) - targets.calories);
+  if (calDiff <= 150) score += SCORE_WEIGHTS.calories;
+  else if (calDiff <= 300) score += SCORE_WEIGHTS.calories * 0.6;
+  else if (calDiff <= 500) score += SCORE_WEIGHTS.calories * 0.2;
+  
+  max += SCORE_WEIGHTS.fat;
+  if (log.fat && log.fat <= targets.fat) score += SCORE_WEIGHTS.fat;
+  else if (log.fat && log.fat <= targets.fat + 10) score += SCORE_WEIGHTS.fat * 0.6;
+  else if (log.fat && log.fat <= targets.fat + 25) score += SCORE_WEIGHTS.fat * 0.2;
+  
+  max += SCORE_WEIGHTS.lift;
+  if (log.liftDone) score += SCORE_WEIGHTS.lift;
+  
+  max += SCORE_WEIGHTS.sleep;
+  if (log.sleep >= 7) score += SCORE_WEIGHTS.sleep;
+  else if (log.sleep >= 6) score += SCORE_WEIGHTS.sleep * 0.5;
+  
+  max += SCORE_WEIGHTS.creatine;
+  if (log.creatine) score += SCORE_WEIGHTS.creatine;
+  
+  max += SCORE_WEIGHTS.alcohol;
+  if (!log.alcohol || log.alcohol === 0) score += SCORE_WEIGHTS.alcohol;
+  else if (log.alcohol <= 2) score += SCORE_WEIGHTS.alcohol * 0.6;
+  
+  return Math.round((score / max) * 100);
+};
+
+export const scoreColor = (score) => {
+  if (score >= 85) return '#10b981';
+  if (score >= 70) return '#f59e0b';
+  if (score >= 50) return '#f97316';
+  return '#ef4444';
+};
+
+export const deficitColor = (deficit) => {
+  if (deficit === null) return '#9ca3af';
+  if (deficit > 200) return '#10b981';
+  if (deficit > -300) return '#10b981';
+  if (deficit > -700) return '#f59e0b';
+  if (deficit > -1000) return '#f97316';
+  return '#ef4444';
+};
+
+export const deficitLabel = (deficit) => {
+  if (deficit === null) return '—';
+  if (deficit > 200) return 'Surplus';
+  if (deficit > -300) return 'Mantenimiento';
+  if (deficit > -700) return 'Déficit moderado';
+  if (deficit > -1000) return 'Déficit agresivo';
+  return 'Déficit extremo';
+};
