@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/recomp-tracker/sw.js', { scope: '/recomp-tracker/' })})}
