@@ -73,7 +73,7 @@ export const WeekView = ({ logs }) => {
       <Card>
         <div className="text-xs text-gray-400 uppercase tracking-wider mb-3">This week</div>
         <StatRow label="Promedio proteína" value={`${avgProtein}g`} status={avgProtein >= 195 ? 'good' : avgProtein >= 175 ? 'warn' : 'bad'} />
-        <StatRow label="Promedio calorías" value={avgCal} sublabel={`Target: ${weekData[0]?.targets.calories || 2400}`} />
+        <StatRow label="Promedio calorías" value={avgCal} sublabel={`Target: ${weekData[0]?.targets.calories || 2200}`} />
         <StatRow label="Días grasa sobre techo" value={`${fatBreaks}/${completed.length || 7}`} status={fatBreaks === 0 ? 'good' : fatBreaks <= 1 ? 'warn' : 'bad'} />
         <StatRow label="Lifts completados" value={`${liftsCompleted}/4`} status={liftsCompleted >= 4 ? 'good' : liftsCompleted >= 3 ? 'warn' : 'bad'} />
         <StatRow label="Creatina días" value={`${creatineDays}/${completed.length || 7}`} status={creatineDays === completed.length ? 'good' : creatineDays >= 5 ? 'warn' : 'bad'} sublabel="Re-saturación post-CKO2" />

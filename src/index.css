@@ -25,3 +25,18 @@ html, body {
     padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
   }
 }
+
+/* Slide-up modal (Quick Add) */
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slideUp 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Soft ring close-pulse when a ring hits 100% */
+@keyframes ringPulse {
+  0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+  50% { filter: drop-shadow(0 0 6px currentColor); }
+}

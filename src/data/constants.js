@@ -8,7 +8,7 @@ export const DEXA_BASELINE = {
   leanMass: 147.8,
   fatMass: 69.0,
   bodyFat: 30.8,
-  bmr: 1818,
+  bmr: 1818, // unchanged — this is the historical DEXA-derived value
   visceralFat: 0.62,
   ALMI: 9.2,
   FFMI: 21.5,
@@ -25,7 +25,11 @@ export const TARGET_FINAL = {
   date: '2027-08-31',
 };
 
-export const BMR_KATCH_MCARDLE = 1818; // Calculado desde DEXA lean mass
+// Working BMR — adjusted 2026-05-29 from 1818 to 1770 based on Starfit avg
+// (May 25-29, range 1763-1780). Phase 1 plateau at 13 days suggested the
+// DEXA-derived BMR was overestimating maintenance. Used for TDEE math.
+export const BMR_KATCH_MCARDLE = 1770;
+export const BMR_DEXA_BASELINE = 1818; // kept for reference / historical plots
 export const TEF_PERCENT = 0.10; // Thermic Effect of Food
 
 export const SCORE_WEIGHTS = {

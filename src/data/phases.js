@@ -1,6 +1,12 @@
 // ============================================================
 // 5-phase plan to Aug 2027
 // ============================================================
+// Last adjusted: 2026-05-29 — BMR correction (1818 → 1770) after 13-day
+// plateau in Phase 1. Cascade re-targeted across all 5 phases.
+// TODO refactor: PWA reads phases from this constant; sheet's Phases tab
+// is a duplicate. Move to single source of truth (sheet → sync.phases)
+// next sprint.
+// ============================================================
 
 export const PHASES = [
   {
@@ -8,23 +14,23 @@ export const PHASES = [
     name: 'Reset',
     startDate: '2026-05-18',
     endDate: '2026-06-14',
-    calories: 2400,
+    calories: 2200,
     protein: 200,
-    carbs: 240,
-    fat: 65,
-    refeedCal: 2800,
-    description: 'Restart post-CKO2. Recovery lumbar + ejecución diaria.',
+    carbs: 220,
+    fat: 55,
+    refeedCal: 2600,
+    description: 'Reset post-CKO2 + recovery lumbar. Adjusted 2026-05-29 (BMR 1770).',
   },
   {
     id: 2,
     name: 'Cut Sostenido',
     startDate: '2026-06-15',
     endDate: '2026-07-31',
-    calories: 2300,
+    calories: 2100,
     protein: 210,
-    carbs: 220,
-    fat: 60,
-    refeedCal: 2700,
+    carbs: 200,
+    fat: 50,
+    refeedCal: 2500,
     description: 'Déficit estable. Pre-panel hormonal agosto.',
   },
   {
@@ -32,11 +38,11 @@ export const PHASES = [
     name: 'Carb Cycling',
     startDate: '2026-08-01',
     endDate: '2026-10-31',
-    calories: 2330,
+    calories: 2130,
     protein: 200,
-    carbs: 220,
-    fat: 60,
-    refeedCal: 2700,
+    carbs: 200,
+    fat: 50,
+    refeedCal: 2500,
     description: 'Ciclado de carbs. Optimizar performance.',
   },
   {
@@ -44,11 +50,11 @@ export const PHASES = [
     name: 'Final Cut',
     startDate: '2026-11-01',
     endDate: '2027-02-28',
-    calories: 2100,
+    calories: 1950,
     protein: 220,
-    carbs: 180,
-    fat: 50,
-    refeedCal: 2500,
+    carbs: 170,
+    fat: 45,
+    refeedCal: 2350,
     description: 'Déficit agresivo. Protección lean máxima.',
   },
   {
@@ -56,11 +62,11 @@ export const PHASES = [
     name: 'Lean Phase',
     startDate: '2027-03-01',
     endDate: '2027-08-31',
-    calories: 2000,
+    calories: 1850,
     protein: 220,
-    carbs: 160,
-    fat: 50,
-    refeedCal: 2400,
+    carbs: 150,
+    fat: 45,
+    refeedCal: 2250,
     description: 'Último tramo a 180 lbs. 12% BF.',
   },
 ];

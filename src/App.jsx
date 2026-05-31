@@ -1,24 +1,26 @@
 import React, { useState } from 'react';
 import { useStorageSync } from './lib/useStorageSync';
 import { SyncIndicator } from './lib/ui';
-import { TodayView } from './components/TodayView';
+import { Home } from './components/Home';
 import { MealsView } from './components/MealsView';
 import { WeekView } from './components/WeekView';
 import { LiftsView } from './components/LiftsView';
 import { BodyView } from './components/BodyView';
 import { PhaseView } from './components/PhaseView';
-import { PathView } from './components/PathView';
+import { FAB } from './components/FAB';
+import { QuickAddModal } from './components/QuickAddModal';
 
 export default function App() {
-  const [tab, setTab] = useState('today');
+  const [tab, setTab] = useState('home');
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const sync = useStorageSync();
 
   const tabs = [
-    { id: 'today', label: 'Today', icon: '◉' },
+    { id: 'home',  label: 'Home',  icon: '◉' },
     { id: 'meals', label: 'Meals', icon: '🍽' },
-    { id: 'week', label: 'Week', icon: '▦' },
+    { id: 'week',  label: 'Week',  icon: '▦' },
     { id: 'lifts', label: 'Lifts', icon: '◇' },
-    { id: 'body', label: 'Body', icon: '◈' },
+    { id: 'body',  label: 'Body',  icon: '◈' },
     { id: 'phase', label: 'Phase', icon: '◐' },
   ];
 
@@ -33,18 +35,19 @@ export default function App() {
             onForce={sync.forceSync}
           />
         </div>
-        
+
         <div className="px-4 pb-4">
-          {tab === 'today' && (
-            <TodayView
+          {tab === 'home' && (
+            <Home
               logs={sync.logs}
               saveLog={sync.saveLog}
               settings={sync.settings}
               updateSetting={sync.updateSetting}
+              lifts={sync.lifts}
             />
           )}
           {tab === 'meals' && <MealsView logs={sync.logs} saveLog={sync.saveLog} />}
-          {tab === 'week' && <WeekView logs={sync.logs} />}
+          {tab === 'week'  && <WeekView  logs={sync.logs} />}
           {tab === 'lifts' && (
             <LiftsView
               lifts={sync.lifts}
@@ -52,7 +55,7 @@ export default function App() {
               injuryActive={sync.settings.injuryActive}
             />
           )}
-          {tab === 'body' && (
+          {tab === 'body'  && (
             <BodyView
               scans={sync.scans}
               saveScan={sync.saveScan}
@@ -63,7 +66,16 @@ export default function App() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-gray-200 safe-bottom">
+      <FAB onClick={() => setQuickAddOpen(true)} label="Agregar comida" />
+
+      <QuickAddModal
+        open={quickAddOpen}
+        onClose={() => setQuickAddOpen(false)}
+        logs={sync.logs}
+        saveLog={sync.saveLog}
+      />
+
+      <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-gray-200 safe-bottom z-30">
         <div className="max-w-md mx-auto px-2 py-2 grid grid-cols-6 gap-1">
           {tabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}

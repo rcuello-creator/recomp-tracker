@@ -1,0 +1,143 @@
+import React from 'react';
+import { Card } from '../lib/ui';
+import { today } from '../lib/helpers';
+import { calcActualDeficit, getPhaseProgress, getProgramProgress } from '../lib/deficit';
+
+// ----------------------------------------------------------------------------
+// Inline progress bar
+// ----------------------------------------------------------------------------
+const ProgressBar = ({ value, color = '#10b981', label }) => {
+  const pct = Math.min(Math.max(value * 100, 0), 100);
+  return (
+    <div>
+      <div className="flex justify-between text-[11px] text-gray-500 mb-1">
+        <span>{label}</span>
+        <span className="tabular-nums">{pct.toFixed(0)}%</span>
+      </div>
+      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+    </div>
+  );
+};
+
+const fmtDelta = (n) => {
+  const r = Math.round(n);
+  if (r === 0) return '0';
+  return r > 0 ? `−${r}` : `+${Math.abs(r)}`; // positive deficit shown as negative cal balance
+};
+
+// ----------------------------------------------------------------------------
+// Yesterday vs Today Target
+// ----------------------------------------------------------------------------
+const YesterdayTodayCard = ({ logs, todayTargetDeficit, bmr }) => {
+  const t = today();
+  const yest = new Date(t + 'T00:00:00');
+  yest.setDate(yest.getDate() - 1);
+  const yestKey = yest.toISOString().split('T')[0];
+  const yLog = logs[yestKey];
+  const yDeficit = calcActualDeficit(yLog, bmr);
+  const yHasData = yLog && (yLog.calories || yLog.activeCal);
+  const hitTarget = yDeficit >= todayTargetDeficit;
+
+  return (
+    <Card>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-gray-400">Ayer</div>
+          {yHasData ? (
+            <div className="flex items-baseline gap-1 mt-1">
+              <span className="text-2xl font-bold tabular-nums">{fmtDelta(yDeficit)}</span>
+              <span className="text-xs text-gray-400">cal</span>
+              <span className={`ml-auto text-lg ${hitTarget ? 'text-emerald-500' : 'text-gray-300'}`}>
+                {hitTarget ? '✓' : '○'}
+              </span>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-400 mt-2">Sin data</div>
+          )}
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-gray-400">Hoy target</div>
+          <div className="flex items-baseline gap-1 mt-1">
+            <span className="text-2xl font-bold tabular-nums text-emerald-600">−{Math.round(todayTargetDeficit)}</span>
+            <span className="text-xs text-gray-400">cal</span>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+};
+
+// ----------------------------------------------------------------------------
+// Phase progress
+// ----------------------------------------------------------------------------
+const PhaseCard = ({ phase, logs, bmr, settings }) => {
+  const prog = getPhaseProgress(phase, today(), logs, bmr, settings);
+  return (
+    <Card>
+      <div className="flex justify-between items-start mb-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-gray-400">
+            Fase {phase.id} — {phase.name}
+          </div>
+          <div className="text-sm text-gray-700 font-medium mt-0.5">
+            Día {prog.daysElapsed} de {prog.totalDays}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] text-gray-400">Necesitas/día</div>
+          <div className="text-base font-bold tabular-nums text-emerald-700">
+            −{Math.abs(prog.requiredDailyDeficit)} cal
+          </div>
+        </div>
+      </div>
+      <div className="space-y-2.5">
+        <ProgressBar value={prog.timePct} color="#9ca3af" label="Tiempo" />
+        <ProgressBar value={prog.deficitPct} color="#10b981" label="Déficit acumulado" />
+      </div>
+    </Card>
+  );
+};
+
+// ----------------------------------------------------------------------------
+// 15-month program progress
+// ----------------------------------------------------------------------------
+const ProgramCard = ({ logs, settings, bmr }) => {
+  const prog = getProgramProgress(today(), logs, settings, bmr);
+  return (
+    <Card>
+      <div className="flex justify-between items-start mb-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-gray-400">Programa 15 meses</div>
+          <div className="text-sm text-gray-700 font-medium mt-0.5">
+            Día {prog.daysElapsed} de {prog.totalDays}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] text-gray-400">Restantes</div>
+          <div className="text-base font-bold tabular-nums text-gray-900">
+            {Math.max(prog.lbsRemaining, 0).toFixed(1)} lbs
+          </div>
+          <div className="text-[10px] text-gray-400">{prog.daysRemaining} días</div>
+        </div>
+      </div>
+      <div className="space-y-2.5">
+        <ProgressBar value={prog.timePct} color="#9ca3af" label="Tiempo" />
+        <ProgressBar value={prog.deficitPct} color="#8b5cf6" label="Déficit acumulado" />
+      </div>
+    </Card>
+  );
+};
+
+// ----------------------------------------------------------------------------
+// Public composite
+// ----------------------------------------------------------------------------
+export const DayProgressCards = ({ logs, settings, phase, todayTargetDeficit, bmr }) => (
+  <>
+    <YesterdayTodayCard logs={logs} todayTargetDeficit={todayTargetDeficit} bmr={bmr} />
+    <PhaseCard phase={phase} logs={logs} bmr={bmr} settings={settings} />
+    <ProgramCard logs={logs} settings={settings} bmr={bmr} />
+  </>
+);

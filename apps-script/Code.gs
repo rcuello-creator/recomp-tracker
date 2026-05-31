@@ -31,6 +31,7 @@ function doPost(e) {
       case 'saveLift': return jsonResponse(saveLift(ss, body.data));
       case 'saveDexa': return jsonResponse(saveDexa(ss, body.data));
       case 'updateSettings': return jsonResponse(updateSettings(ss, body.data));
+      case 'upsertPhase': return jsonResponse(upsertPhase(ss, body.data));
       case 'getHistory': return jsonResponse(getHistory(ss));
       case 'syncBatch': return jsonResponse(syncBatch(ss, body.data));
       default: return jsonResponse({ error: 'Unknown action' }, 400);
@@ -67,30 +68,44 @@ function saveLog(ss, data) {
   const values = sheet.getDataRange().getValues();
   const headers = values[0];
   const dateCol = headers.indexOf('date');
-  const updatedAtCol = headers.indexOf('updatedAt');
-  
-  // Find existing row by date
+
+  // Normalize cell value to "YYYY-MM-DD" — Google Sheets may return a Date
+  // object instead of a string, which breaks strict equality with data.date.
+  function cellAsDateStr(v) {
+    if (v instanceof Date) return Utilities.formatDate(v, 'GMT', 'yyyy-MM-dd');
+    return String(v || '');
+  }
+
+  // Find existing row by date.
   let rowIndex = -1;
   for (let i = 1; i < values.length; i++) {
-    if (values[i][dateCol] === data.date) {
+    if (cellAsDateStr(values[i][dateCol]) === data.date) {
       rowIndex = i + 1;
       break;
     }
   }
-  
-  const row = headers.map(h => {
+
+  const previous = rowIndex > 0 ? values[rowIndex - 1] : null;
+
+  // MERGE semantics: for each column, prefer the incoming value when the
+  // payload actually carries one; otherwise keep what was already there.
+  // This lets Apple Watch screenshots (steps/notes only) coexist with Noom
+  // screenshots (macros only) on the same day without clobbering each other.
+  const row = headers.map((h, idx) => {
     if (h === 'updatedAt') return new Date().toISOString();
-    if (data[h] === undefined || data[h] === null) return '';
-    return data[h];
+    if (Object.prototype.hasOwnProperty.call(data, h) && data[h] !== null && data[h] !== '') {
+      return data[h];
+    }
+    if (previous) return previous[idx];
+    return '';
   });
-  
+
   if (rowIndex > 0) {
     sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-  } else {
-    sheet.appendRow(row);
+    return { success: true, date: data.date, action: 'updated' };
   }
-  
-  return { success: true, date: data.date };
+  sheet.appendRow(row);
+  return { success: true, date: data.date, action: 'inserted' };
 }
 
 function saveScan(ss, data) {
@@ -133,6 +148,46 @@ function saveDexa(ss, data) {
   
   sheet.appendRow(row);
   return { success: true, dexa: data };
+}
+
+function upsertPhase(ss, data) {
+  // Upsert a single phase row by `id`. Headers in Phases tab:
+  //   id, name, startDate, endDate, calories, protein, carbs, fat, refeedCal, description
+  // If a row with matching id exists, update its columns in place; otherwise append.
+  if (data == null || data.id == null) {
+    throw new Error('upsertPhase requires data.id');
+  }
+  const sheet = ss.getSheetByName('Phases');
+  if (!sheet) throw new Error('Phases sheet not found');
+
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  const idCol = headers.indexOf('id');
+  if (idCol < 0) throw new Error('Phases sheet missing `id` header');
+
+  let rowIndex = -1;
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][idCol]) === String(data.id)) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+
+  // Build the row from headers — values that aren't in `data` keep their previous
+  // value (for updates) or default to '' (for inserts). Never invent fields.
+  const previous = rowIndex > 0 ? values[rowIndex - 1] : headers.map(() => '');
+  const row = headers.map((h, idx) => {
+    if (data[h] === undefined) return previous[idx] !== undefined ? previous[idx] : '';
+    if (data[h] === null) return '';
+    return data[h];
+  });
+
+  if (rowIndex > 0) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+    return { success: true, phase: data.id, action: 'updated' };
+  }
+  sheet.appendRow(row);
+  return { success: true, phase: data.id, action: 'inserted' };
 }
 
 function updateSettings(ss, data) {
