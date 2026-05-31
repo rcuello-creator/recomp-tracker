@@ -3,8 +3,9 @@ import { Card, NumInput, Toggle } from '../lib/ui';
 import { InjuryBanner } from './InjuryBanner';
 import { DailyRings } from './DailyRings';
 import { DayProgressCards } from './DayProgressCards';
+import { WeekProgressCard } from './WeekProgressCard';
 import { today, formatDateLong } from '../lib/helpers';
-import { getDayType, getRingTargets, calcActualDeficit } from '../lib/deficit';
+import { getDayType, getRingTargets, calcActualDeficit, getActiveCalTarget } from '../lib/deficit';
 import { BMR_KATCH_MCARDLE } from '../data/constants';
 
 // ----------------------------------------------------------------------------
@@ -13,9 +14,9 @@ import { BMR_KATCH_MCARDLE } from '../data/constants';
 // ----------------------------------------------------------------------------
 
 const DAY_TYPE = {
-  LIFT:    { label: 'DÍA LIFT',    color: '#10b981' },
-  REFEED:  { label: 'DÍA REFEED',  color: '#AF52DE' },
-  NO_LIFT: { label: 'SIN LIFT',    color: '#6b7280' },
+  LIFT:     { label: 'DÍA LIFT',     color: '#10b981' },
+  REFEED:   { label: 'DÍA REFEED',   color: '#AF52DE' },
+  STANDARD: { label: 'DÍA ESTÁNDAR', color: '#6b7280' },
 };
 
 const RING_COLOR = {
@@ -82,6 +83,8 @@ export const Home = ({ logs, saveLog, settings, updateSetting, lifts }) => {
 
       <DayProgressCards logs={logs} settings={settings} phase={targets.phase} todayTargetDeficit={targets.deficit} bmr={bmr} />
 
+      <WeekProgressCard logs={logs} lifts={lifts} settings={settings} />
+
       <Card>
         <div className="text-xs text-gray-400 uppercase tracking-wider mb-3">Training & recovery</div>
 
@@ -99,7 +102,13 @@ export const Home = ({ logs, saveLog, settings, updateSetting, lifts }) => {
         {log.liftDone && (
           <NumInput label="Volumen lift" value={log.liftVolume} onChange={(v) => update('liftVolume', v)} unit="lbs" step={100} />
         )}
-        <NumInput label="Active cal" value={log.activeCal} onChange={(v) => update('activeCal', v)} unit="cal" target="500+" />
+        <NumInput
+          label="Active cal"
+          value={log.activeCal}
+          onChange={(v) => update('activeCal', v)}
+          unit="cal"
+          target={`${getActiveCalTarget(dayType, settings)}+`}
+        />
         <Toggle label="Creatina 5g" sublabel="Re-saturación" checked={!!log.creatine} onChange={(v) => update('creatine', v)} />
         <NumInput label="Sueño" value={log.sleep} onChange={(v) => update('sleep', v)} unit="hrs" target="7+" step={0.5} />
         <NumInput label="Pasos" value={log.steps} onChange={(v) => update('steps', v)} unit="" target="10K" step={500} />

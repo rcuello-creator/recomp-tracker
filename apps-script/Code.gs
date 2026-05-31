@@ -32,6 +32,8 @@ function doPost(e) {
       case 'saveDexa': return jsonResponse(saveDexa(ss, body.data));
       case 'updateSettings': return jsonResponse(updateSettings(ss, body.data));
       case 'upsertPhase': return jsonResponse(upsertPhase(ss, body.data));
+      case 'migrate': return jsonResponse(migrate(ss, body.data));
+      case 'cleanupEmptyLifts': return jsonResponse(cleanupEmptyLifts(ss));
       case 'getHistory': return jsonResponse(getHistory(ss));
       case 'syncBatch': return jsonResponse(syncBatch(ss, body.data));
       default: return jsonResponse({ error: 'Unknown action' }, 400);
@@ -148,6 +150,71 @@ function saveDexa(ss, data) {
   
   sheet.appendRow(row);
   return { success: true, dexa: data };
+}
+
+function cleanupEmptyLifts(ss) {
+  // Delete rows from the Lifts tab where both `session` and `volume` are
+  // empty — these are residue from OCR runs where the Future Pro extractor
+  // fired with no useful data. Iterates bottom-up to keep row indices stable.
+  const sheet = ss.getSheetByName('Lifts');
+  if (!sheet) throw new Error('Lifts sheet not found');
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return { success: true, deleted: 0 };
+
+  const headers = values[0];
+  const sessCol = headers.indexOf('session');
+  const volCol = headers.indexOf('volume');
+  if (sessCol < 0 || volCol < 0) throw new Error('Lifts schema missing session/volume');
+
+  const toDelete = [];
+  for (let i = 1; i < values.length; i++) {
+    const sess = String(values[i][sessCol] || '').trim();
+    const vol = values[i][volCol];
+    const volEmpty = vol === '' || vol === null || vol === undefined;
+    if (!sess && volEmpty) toDelete.push(i + 1); // sheet rows are 1-indexed
+  }
+  // Bottom-up to preserve indices
+  for (let r = toDelete.length - 1; r >= 0; r--) {
+    sheet.deleteRow(toDelete[r]);
+  }
+  return { success: true, deleted: toDelete.length, rows: toDelete };
+}
+
+function migrate(ss, data) {
+  // Idempotent schema migration: ensures the requested columns exist on each
+  // tab. Adds missing columns at the END (never inserts mid-row — avoids
+  // shifting existing data). Returns per-tab summary of which columns were
+  // added vs already present.
+  //
+  // Payload shape:
+  //   { tabs: { DailyLogs: ['activeCal', 'newCol'], StarfitScans: ['skeletal_muscle'] } }
+  if (!data || !data.tabs) throw new Error('migrate requires data.tabs');
+
+  const summary = {};
+  Object.entries(data.tabs).forEach(function (entry) {
+    const tabName = entry[0];
+    const wanted = entry[1] || [];
+    const sheet = ss.getSheetByName(tabName);
+    if (!sheet) {
+      summary[tabName] = { error: 'tab not found' };
+      return;
+    }
+    const lastCol = sheet.getLastColumn();
+    const headers = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+    const added = [];
+    const present = [];
+    wanted.forEach(function (col) {
+      if (headers.indexOf(col) >= 0) {
+        present.push(col);
+      } else {
+        sheet.getRange(1, sheet.getLastColumn() + 1).setValue(col);
+        added.push(col);
+      }
+    });
+    summary[tabName] = { added: added, present: present };
+  });
+
+  return { success: true, summary: summary };
 }
 
 function upsertPhase(ss, data) {
@@ -292,7 +359,7 @@ function initializeSheet() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   
   const schemas = {
-    'DailyLogs': ['date','calories','protein','carbs','fat','liftDone','liftVolume','sleep','alcohol','steps','creatine','notes','adherenceScore','updatedAt'],
+    'DailyLogs': ['date','calories','protein','carbs','fat','liftDone','liftVolume','sleep','alcohol','steps','creatine','notes','adherenceScore','updatedAt','activeCal'],
     'StarfitScans': ['date','weight','bodyFat','leanMass','fatMass','bodyScore','bodyWater','visceralFat','bmr','context','createdAt'],
     'Lifts': ['date','coach','session','type','volume','duration','avgBpm','calories','notes','flag','createdAt'],
     'DexaScans': ['date','weight','leanMass','fatMass','bodyFat','bmr','visceralFat','almi','ffmi','tScore','bmc','facility','notes','createdAt'],

@@ -7,3 +7,8 @@ dist/
 *.log
 .vscode/
 .idea/
+
+# Session brief drafts kept locally for reference — contain secrets, never commit
+/RECOMP_STATUS_*.md
+/CLAUDE_CODE_BRIEF_*.md
+/CLAUDE_CODE_PROMPT_*.md

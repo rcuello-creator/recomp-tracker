@@ -30,23 +30,40 @@ const fmtDelta = (n) => {
 
 // ----------------------------------------------------------------------------
 // Yesterday vs Today Target
+//
+// Bug 1 fix: previously hard-coded `yesterday = today - 1`; when yesterday had
+// no log (common — agent OCR doesn't run every day), the card said "Sin data".
+// Now walks back up to 7 days to find the most recent day with intake/active.
 // ----------------------------------------------------------------------------
+const findLastDayWithData = (logs, todayKey, lookbackDays = 7) => {
+  const t = new Date(todayKey + 'T00:00:00');
+  for (let i = 1; i <= lookbackDays; i++) {
+    const d = new Date(t);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().split('T')[0];
+    const log = logs[key];
+    if (log && (log.calories || log.activeCal)) {
+      return { key, log, daysAgo: i };
+    }
+  }
+  return null;
+};
+
 const YesterdayTodayCard = ({ logs, todayTargetDeficit, bmr }) => {
   const t = today();
-  const yest = new Date(t + 'T00:00:00');
-  yest.setDate(yest.getDate() - 1);
-  const yestKey = yest.toISOString().split('T')[0];
-  const yLog = logs[yestKey];
-  const yDeficit = calcActualDeficit(yLog, bmr);
-  const yHasData = yLog && (yLog.calories || yLog.activeCal);
-  const hitTarget = yDeficit >= todayTargetDeficit;
+  const recent = findLastDayWithData(logs, t);
+  const yDeficit = recent ? calcActualDeficit(recent.log, bmr) : 0;
+  const hitTarget = recent && yDeficit >= todayTargetDeficit;
+  const label = recent
+    ? (recent.daysAgo === 1 ? 'Ayer' : `Hace ${recent.daysAgo}d (${recent.key.slice(5)})`)
+    : 'Ayer';
 
   return (
     <Card>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-gray-400">Ayer</div>
-          {yHasData ? (
+          <div className="text-[10px] uppercase tracking-wider text-gray-400">{label}</div>
+          {recent ? (
             <div className="flex items-baseline gap-1 mt-1">
               <span className="text-2xl font-bold tabular-nums">{fmtDelta(yDeficit)}</span>
               <span className="text-xs text-gray-400">cal</span>
@@ -55,7 +72,7 @@ const YesterdayTodayCard = ({ logs, todayTargetDeficit, bmr }) => {
               </span>
             </div>
           ) : (
-            <div className="text-sm text-gray-400 mt-2">Sin data</div>
+            <div className="text-sm text-gray-400 mt-2">Sin data 7d</div>
           )}
         </div>
         <div>
