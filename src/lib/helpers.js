@@ -5,7 +5,12 @@
 import { PHASES } from '../data/phases';
 import { SCORE_WEIGHTS, BMR_KATCH_MCARDLE, TEF_PERCENT } from '../data/constants';
 
-export const today = () => new Date().toISOString().split('T')[0];
+// Local-time YYYY-MM-DD. Was using `toISOString().split('T')[0]` which returns
+// the UTC date — after 8pm EDT (Florida), UTC has already rolled over to the
+// next day, so the app showed "1 junio" when locally it was still "31 mayo"
+// and saveLog wrote rows under the wrong date key. 'sv-SE' locale formats
+// dates as YYYY-MM-DD using local time.
+export const today = () => new Date().toLocaleDateString('sv-SE');
 
 // Defensive YYYY-MM-DD coercion — Settings tab values come back as ISO
 // timestamps ("2026-05-18T04:00:00.000Z") from Google Sheets when set via
