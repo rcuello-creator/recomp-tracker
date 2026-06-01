@@ -12,6 +12,11 @@ import { daysBetween, normalizeDate } from './helpers';
 
 const REFEED_DEFAULT_DOW = 'Saturday';
 
+// Healthy ceiling for the daily deficit we ASK the user to hit. Above this,
+// sustained dieting risks lean-mass loss; the right lever is extending the
+// timeline (see 2026-06-01 Phase 1 extension), not a deeper daily cut.
+const HEALTHY_MAX_DAILY = 750;
+
 // ----------------------------------------------------------------------------
 // Day type — LIFT (Lifts row OR logs[date].liftDone) | REFEED (matches
 // refeed_schedule) | STANDARD
@@ -143,13 +148,24 @@ export const getPhaseProgress = (phase, currentDate, logs = {}, bmr, settings = 
   const deficitPct = totalTargetDeficit > 0 ? cumulativeDeficit / totalTargetDeficit : 0;
 
   const remaining = totalTargetDeficit - cumulativeDeficit;
-  const requiredDailyDeficit = daysRemaining > 0 ? Math.round(remaining / daysRemaining) : 0;
+  const requiredDailyRaw = daysRemaining > 0 ? Math.round(remaining / daysRemaining) : 0;
+
+  // Healthy ceiling on what we ASK the user to hit per day. If falling behind
+  // pushes the raw "catch-up" math above this, asking for it risks lean loss —
+  // so we cap the displayed/suggested target and flag the gap as aggressive.
+  // The phase end shifting (extending the timeline) is the healthy lever, not
+  // a bigger daily deficit. Settings key `healthy_max_daily` overrides 750.
+  const healthyMaxDaily = pick(settings, 'healthy_max_daily', HEALTHY_MAX_DAILY);
+  const requiredDailyDeficit = Math.min(requiredDailyRaw, healthyMaxDaily);
+  const isAggressive = requiredDailyRaw > healthyMaxDaily;
 
   return {
     daysElapsed, totalDays, daysRemaining,
     timePct, deficitPct,
     cumulativeDeficit, totalTargetDeficit, targetDaily,
-    requiredDailyDeficit,
+    // requiredDailyDeficit is the healthy, capped value (primary display /
+    // today's target). requiredDailyRaw is the uncapped catch-up math.
+    requiredDailyDeficit, requiredDailyRaw, isAggressive, healthyMaxDaily,
   };
 };
 

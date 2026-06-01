@@ -4,7 +4,7 @@ import { InjuryBanner } from './InjuryBanner';
 import { DailyRings } from './DailyRings';
 import { DayProgressCards } from './DayProgressCards';
 import { WeekProgressCard } from './WeekProgressCard';
-import { today, formatDateLong } from '../lib/helpers';
+import { today, formatDateLong, formatTime } from '../lib/helpers';
 import { getDayType, getRingTargets, calcActualDeficit, getActiveCalTarget, getStepsTarget } from '../lib/deficit';
 import { BMR_KATCH_MCARDLE } from '../data/constants';
 
@@ -79,6 +79,11 @@ export const Home = ({ logs, saveLog, settings, updateSetting, lifts }) => {
 
       <Card>
         <DailyRings rings={rings} />
+        {formatTime(log.updatedAt) && (
+          <div className="text-[10px] text-gray-400 text-center mt-3">
+            Última actualización: {formatTime(log.updatedAt)}
+          </div>
+        )}
       </Card>
 
       <DayProgressCards logs={logs} settings={settings} phase={targets.phase} bmr={bmr} />

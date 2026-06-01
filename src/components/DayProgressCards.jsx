@@ -103,9 +103,19 @@ const PhaseCard = ({ phase, prog }) => (
       </div>
       <div className="text-right">
         <div className="text-[10px] text-gray-400">Necesitas/día</div>
-        <div className="text-base font-bold tabular-nums text-emerald-700">
+        <div
+          className={`text-base font-bold tabular-nums ${prog.isAggressive ? 'text-amber-500' : 'text-emerald-700'}`}
+          title={prog.isAggressive
+            ? `El catch-up matemático pide −${Math.abs(prog.requiredDailyRaw)} cal/día, pero lo limitamos a −${prog.healthyMaxDaily} para preservar lean. La timeline ya se extiende para compensar.`
+            : undefined}
+        >
           −{Math.abs(prog.requiredDailyDeficit)} cal
         </div>
+        {prog.isAggressive && (
+          <div className="text-[10px] text-amber-500 mt-0.5 tabular-nums">
+            Math: −{Math.abs(prog.requiredDailyRaw)} · Saludable: −{prog.healthyMaxDaily}
+          </div>
+        )}
       </div>
     </div>
     <div className="space-y-2.5">

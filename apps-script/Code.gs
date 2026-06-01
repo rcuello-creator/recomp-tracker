@@ -455,3 +455,67 @@ function weeklyDigest() {
   // Trigger this Monday 7am via Apps Script trigger
   // TODO: send email summary of last week
 }
+
+function cleanupDuplicateDates() {
+  // ONE-TIME cleanup: collapse DailyLogs to one row per date. saveLog upserts
+  // by date, so duplicates should only exist from the May-31 backfill or a
+  // pre-upsert era. For each date we KEEP the row with the latest `updatedAt`
+  // (the merged/most-complete one) and delete the rest. Unlike a naive
+  // clear()+re-append, this deletes rows in place — header row, frozen row,
+  // and formatting are preserved, and "latest updatedAt wins" keeps the row
+  // that accumulated the most merged fields rather than just the last appended.
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = ss.getSheetByName('DailyLogs');
+  if (!sheet) throw new Error('DailyLogs sheet not found');
+
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 3) {
+    Logger.log('cleanupDuplicateDates: nothing to do (' + Math.max(values.length - 1, 0) + ' data rows)');
+    return { original: Math.max(values.length - 1, 0), removed: 0, kept: Math.max(values.length - 1, 0) };
+  }
+
+  const headers = values[0];
+  const dateCol = headers.indexOf('date');
+  const updatedCol = headers.indexOf('updatedAt');
+  if (dateCol < 0) throw new Error('DailyLogs missing `date` header');
+
+  function dateKey(v) {
+    if (v instanceof Date) return Utilities.formatDate(v, 'GMT', 'yyyy-MM-dd');
+    return String(v || '').slice(0, 10);
+  }
+
+  // Best row per date: highest updatedAt, tie-break on the later sheet row.
+  const best = {}; // date -> { row: 1-based, stamp: string }
+  for (let i = 1; i < values.length; i++) {
+    const key = dateKey(values[i][dateCol]);
+    if (!key) continue;
+    const stamp = updatedCol >= 0 ? String(values[i][updatedCol] || '') : '';
+    const row = i + 1;
+    const cur = best[key];
+    if (!cur || stamp > cur.stamp || (stamp === cur.stamp && row > cur.row)) {
+      best[key] = { row: row, stamp: stamp };
+    }
+  }
+
+  const keepRows = {};
+  Object.keys(best).forEach(function (k) { keepRows[best[k].row] = true; });
+
+  const toDelete = [];
+  for (let i = 1; i < values.length; i++) {
+    const key = dateKey(values[i][dateCol]);
+    const row = i + 1;
+    if (!key) continue;        // leave truly-blank rows alone
+    if (!keepRows[row]) toDelete.push(row);
+  }
+
+  // Bottom-up so row indices stay valid as we delete.
+  for (let d = toDelete.length - 1; d >= 0; d--) {
+    sheet.deleteRow(toDelete[d]);
+  }
+
+  const original = values.length - 1;
+  const result = { original: original, removed: toDelete.length, kept: original - toDelete.length };
+  Logger.log('cleanupDuplicateDates: ' + JSON.stringify(result) +
+    (toDelete.length > 0 ? ' (duplicates found — expected)' : ' (no duplicates)'));
+  return result;
+}

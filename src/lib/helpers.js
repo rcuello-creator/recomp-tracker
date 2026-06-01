@@ -47,6 +47,15 @@ export const formatDateLong = (dateStr) => {
   return d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
 };
 
+// Local HH:MM from an ISO timestamp (e.g. log.updatedAt). Returns null for
+// missing/unparseable input so callers can hide the label entirely.
+export const formatTime = (iso) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+};
+
 export const getCurrentPhase = (date = today()) => {
   return PHASES.find(p => date >= p.startDate && date <= p.endDate) || PHASES[0];
 };
