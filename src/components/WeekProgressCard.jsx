@@ -85,14 +85,14 @@ export const WeekProgressCard = ({ logs, lifts, settings }) => {
     const hasIntake = log.calories;
     if (hasIntake) {
       daysWithData++;
-      const dayType = getDayType(d, lifts, settings);
+      const dayType = getDayType(d, lifts, settings, logs);
       const targets = getRingTargets(d, dayType, settings);
       const calOk = Math.abs(log.calories - targets.calories) <= 100;
       const protOk = (log.protein || 0) >= targets.protein - 10; // 10g grace
       if (calOk && protOk) daysOnTarget++;
     }
     if (log.steps != null && log.steps !== '') {
-      const dayType = getDayType(d, lifts, settings);
+      const dayType = getDayType(d, lifts, settings, logs);
       const floor = dayType === 'LIFT' ? stepsLiftDay : stepsNoLift;
       if (log.steps >= floor) stepsDaysComplete++;
     }

@@ -90,33 +90,30 @@ const YesterdayTodayCard = ({ logs, todayTargetDeficit, bmr }) => {
 // ----------------------------------------------------------------------------
 // Phase progress
 // ----------------------------------------------------------------------------
-const PhaseCard = ({ phase, logs, bmr, settings }) => {
-  const prog = getPhaseProgress(phase, today(), logs, bmr, settings);
-  return (
-    <Card>
-      <div className="flex justify-between items-start mb-3">
-        <div>
-          <div className="text-[10px] uppercase tracking-wider text-gray-400">
-            Fase {phase.id} — {phase.name}
-          </div>
-          <div className="text-sm text-gray-700 font-medium mt-0.5">
-            Día {prog.daysElapsed} de {prog.totalDays}
-          </div>
+const PhaseCard = ({ phase, prog }) => (
+  <Card>
+    <div className="flex justify-between items-start mb-3">
+      <div>
+        <div className="text-[10px] uppercase tracking-wider text-gray-400">
+          Fase {phase.id} — {phase.name}
         </div>
-        <div className="text-right">
-          <div className="text-[10px] text-gray-400">Necesitas/día</div>
-          <div className="text-base font-bold tabular-nums text-emerald-700">
-            −{Math.abs(prog.requiredDailyDeficit)} cal
-          </div>
+        <div className="text-sm text-gray-700 font-medium mt-0.5">
+          Día {prog.daysElapsed} de {prog.totalDays}
         </div>
       </div>
-      <div className="space-y-2.5">
-        <ProgressBar value={prog.timePct} color="#9ca3af" label="Tiempo" />
-        <ProgressBar value={prog.deficitPct} color="#10b981" label="Déficit acumulado" />
+      <div className="text-right">
+        <div className="text-[10px] text-gray-400">Necesitas/día</div>
+        <div className="text-base font-bold tabular-nums text-emerald-700">
+          −{Math.abs(prog.requiredDailyDeficit)} cal
+        </div>
       </div>
-    </Card>
-  );
-};
+    </div>
+    <div className="space-y-2.5">
+      <ProgressBar value={prog.timePct} color="#9ca3af" label="Tiempo" />
+      <ProgressBar value={prog.deficitPct} color="#10b981" label="Déficit acumulado" />
+    </div>
+  </Card>
+);
 
 // ----------------------------------------------------------------------------
 // 15-month program progress
@@ -150,11 +147,22 @@ const ProgramCard = ({ logs, settings, bmr }) => {
 
 // ----------------------------------------------------------------------------
 // Public composite
+//
+// `todayTargetDeficit` prop is kept for backward compat but is OVERRIDDEN by
+// the phase's dynamic `requiredDailyDeficit` (Bug 3 fix). The static window
+// midpoint doesn't reflect what the user actually needs to hit per day given
+// what's already been accumulated vs the phase's lbs-to-lose target.
 // ----------------------------------------------------------------------------
-export const DayProgressCards = ({ logs, settings, phase, todayTargetDeficit, bmr }) => (
-  <>
-    <YesterdayTodayCard logs={logs} todayTargetDeficit={todayTargetDeficit} bmr={bmr} />
-    <PhaseCard phase={phase} logs={logs} bmr={bmr} settings={settings} />
-    <ProgramCard logs={logs} settings={settings} bmr={bmr} />
-  </>
-);
+export const DayProgressCards = ({ logs, settings, phase, bmr }) => {
+  const phaseProg = getPhaseProgress(phase, today(), logs, bmr, settings);
+  // Use the dynamic required deficit as today's target; clamp ≥ 0 so we don't
+  // suggest a "surplus target" if the user is already ahead of schedule.
+  const todayTarget = Math.max(0, phaseProg.requiredDailyDeficit);
+  return (
+    <>
+      <YesterdayTodayCard logs={logs} todayTargetDeficit={todayTarget} bmr={bmr} />
+      <PhaseCard phase={phase} prog={phaseProg} />
+      <ProgramCard logs={logs} settings={settings} bmr={bmr} />
+    </>
+  );
+};

@@ -8,15 +8,21 @@
 
 import { PHASES } from '../data/phases';
 import { BMR_KATCH_MCARDLE, TEF_PERCENT } from '../data/constants';
-import { daysBetween } from './helpers';
+import { daysBetween, normalizeDate } from './helpers';
 
 const REFEED_DEFAULT_DOW = 'Saturday';
 
 // ----------------------------------------------------------------------------
-// Day type — LIFT (has Lifts row today) | REFEED (matches refeed_schedule) | STANDARD
+// Day type — LIFT (Lifts row OR logs[date].liftDone) | REFEED (matches
+// refeed_schedule) | STANDARD
+//
+// Reads from BOTH Lifts tab AND DailyLogs.liftDone so the badge updates the
+// moment the user toggles "Lift hecho" in Home, even before the OCR agent
+// processes the Future Pro screenshot (or if the user manually marks it).
 // ----------------------------------------------------------------------------
-export const getDayType = (date, lifts = [], settings = {}) => {
+export const getDayType = (date, lifts = [], settings = {}, logs = {}) => {
   if (lifts.some(l => l.date === date)) return 'LIFT';
+  if (logs[date] && logs[date].liftDone) return 'LIFT';
   const dow = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
   const refeedDay = settings.refeed_schedule || settings.refeed_day || REFEED_DEFAULT_DOW;
   if (dow === refeedDay) return 'REFEED';
@@ -69,6 +75,13 @@ export const getActiveCalTarget = (dayType, settings = {}) => {
   return pick(settings, `target_active_cal_${dk}`, defaults[dk]);
 };
 
+// Daily steps target (dynamic by day type — fixes hardcoded "10K")
+// Settings: steps_no_lift / steps_lift_day. Refeed treated as no-lift.
+export const getStepsTarget = (dayType, settings = {}) => {
+  if (dayType === 'LIFT') return pick(settings, 'steps_lift_day', 7000);
+  return pick(settings, 'steps_no_lift', 10000);
+};
+
 // ----------------------------------------------------------------------------
 // TDEE & deficit for a single day
 // ----------------------------------------------------------------------------
@@ -87,25 +100,46 @@ export const calcActualDeficit = (log, bmr) => {
 
 // ----------------------------------------------------------------------------
 // Phase progress — time elapsed vs total + cumulative deficit
+//
+// totalTargetDeficit precedence:
+//   1. settings.weight_baseline_phase{N} & weight_target_phase{N}_end (lbs * 3500)
+//   2. (deficit_target_daily_low + high) / 2 * totalDays (legacy window)
 // ----------------------------------------------------------------------------
 export const getPhaseProgress = (phase, currentDate, logs = {}, bmr, settings = {}) => {
-  const totalDays = daysBetween(phase.startDate, phase.endDate) + 1;
-  const daysElapsed = Math.min(Math.max(daysBetween(phase.startDate, currentDate) + 1, 1), totalDays);
+  const phaseStart = normalizeDate(phase.startDate);
+  const phaseEnd = normalizeDate(phase.endDate);
+  const today = normalizeDate(currentDate);
+
+  const totalDays = daysBetween(phaseStart, phaseEnd) + 1;
+  const daysElapsed = Math.min(Math.max(daysBetween(phaseStart, today) + 1, 1), totalDays);
   const daysRemaining = Math.max(totalDays - daysElapsed, 0);
   const timePct = daysElapsed / totalDays;
 
   let cumulativeDeficit = 0;
   Object.values(logs).forEach(l => {
-    if (l && l.date >= phase.startDate && l.date <= currentDate) {
+    const d = normalizeDate(l && l.date);
+    if (d && d >= phaseStart && d <= today) {
       cumulativeDeficit += calcActualDeficit(l, bmr);
     }
   });
 
-  // Target uses the average of the daily deficit window if set, else 600.
-  const dlo = Number(settings.deficit_target_daily_low) || 500;
-  const dhi = Number(settings.deficit_target_daily_high) || 700;
-  const targetDaily = Math.round((dlo + dhi) / 2);
-  const totalTargetDeficit = targetDaily * totalDays;
+  // Prefer phase-specific weight targets (Bug 3 fix). For Phase 1 these are
+  // weight_baseline_phase1=223.4 & weight_target_phase1_end=218 → 5.4 lbs *
+  // 3500 = 18,900. Falls back to deficit window if phase keys are absent.
+  const wBaseline = pick(settings, `weight_baseline_phase${phase.id}`, null);
+  const wEnd = pick(settings, `weight_target_phase${phase.id}_end`, null);
+  let totalTargetDeficit;
+  let targetDaily;
+  if (wBaseline != null && wEnd != null && wBaseline > wEnd) {
+    const lbsToLose = wBaseline - wEnd;
+    totalTargetDeficit = lbsToLose * 3500;
+    targetDaily = totalDays > 0 ? Math.round(totalTargetDeficit / totalDays) : 0;
+  } else {
+    const dlo = pick(settings, 'deficit_target_daily_low', 500);
+    const dhi = pick(settings, 'deficit_target_daily_high', 700);
+    targetDaily = Math.round((dlo + dhi) / 2);
+    totalTargetDeficit = targetDaily * totalDays;
+  }
   const deficitPct = totalTargetDeficit > 0 ? cumulativeDeficit / totalTargetDeficit : 0;
 
   const remaining = totalTargetDeficit - cumulativeDeficit;
@@ -121,19 +155,24 @@ export const getPhaseProgress = (phase, currentDate, logs = {}, bmr, settings = 
 
 // ----------------------------------------------------------------------------
 // Full 15-month program progress
+// Defensive normalizeDate on every settings/log date — Settings values come
+// back as ISO timestamps from Google Sheets and break naïve date math.
 // ----------------------------------------------------------------------------
 export const getProgramProgress = (currentDate, logs = {}, settings = {}, bmr) => {
-  const startDate = settings.program_start_date || PHASES[0].startDate;
-  const endDate = settings.program_end_date || PHASES[PHASES.length - 1].endDate;
-  const totalDays = Number(settings.program_total_days) || (daysBetween(startDate, endDate) + 1);
-  const daysElapsed = Math.min(Math.max(daysBetween(startDate, currentDate) + 1, 1), totalDays);
+  const startDate = normalizeDate(settings.program_start_date) || normalizeDate(PHASES[0].startDate);
+  const endDate = normalizeDate(settings.program_end_date) || normalizeDate(PHASES[PHASES.length - 1].endDate);
+  const today = normalizeDate(currentDate);
+
+  const totalDays = pick(settings, 'program_total_days', daysBetween(startDate, endDate) + 1);
+  const daysElapsed = Math.min(Math.max(daysBetween(startDate, today) + 1, 1), totalDays);
   const daysRemaining = Math.max(totalDays - daysElapsed, 0);
-  const totalLbsToLose = Number(settings.program_total_lbs_to_lose) || 43.4;
-  const totalDeficitTarget = Number(settings.program_total_deficit_target) || (totalLbsToLose * 3500);
+  const totalLbsToLose = pick(settings, 'program_total_lbs_to_lose', 43.4);
+  const totalDeficitTarget = pick(settings, 'program_total_deficit_target', totalLbsToLose * 3500);
 
   let cumulativeDeficit = 0;
   Object.values(logs).forEach(l => {
-    if (l && l.date >= startDate && l.date <= currentDate) {
+    const d = normalizeDate(l && l.date);
+    if (d && d >= startDate && d <= today) {
       cumulativeDeficit += calcActualDeficit(l, bmr);
     }
   });

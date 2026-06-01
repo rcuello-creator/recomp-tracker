@@ -5,7 +5,7 @@ import { DailyRings } from './DailyRings';
 import { DayProgressCards } from './DayProgressCards';
 import { WeekProgressCard } from './WeekProgressCard';
 import { today, formatDateLong } from '../lib/helpers';
-import { getDayType, getRingTargets, calcActualDeficit, getActiveCalTarget } from '../lib/deficit';
+import { getDayType, getRingTargets, calcActualDeficit, getActiveCalTarget, getStepsTarget } from '../lib/deficit';
 import { BMR_KATCH_MCARDLE } from '../data/constants';
 
 // ----------------------------------------------------------------------------
@@ -30,7 +30,7 @@ const RING_COLOR = {
 export const Home = ({ logs, saveLog, settings, updateSetting, lifts }) => {
   const date = today();
   const log = logs[date] || {};
-  const dayType = getDayType(date, lifts, settings);
+  const dayType = getDayType(date, lifts, settings, logs);
   const targets = getRingTargets(date, dayType, settings);
   const bmr = Number(settings?.bmr_katch) || BMR_KATCH_MCARDLE;
 
@@ -81,7 +81,7 @@ export const Home = ({ logs, saveLog, settings, updateSetting, lifts }) => {
         <DailyRings rings={rings} />
       </Card>
 
-      <DayProgressCards logs={logs} settings={settings} phase={targets.phase} todayTargetDeficit={targets.deficit} bmr={bmr} />
+      <DayProgressCards logs={logs} settings={settings} phase={targets.phase} bmr={bmr} />
 
       <WeekProgressCard logs={logs} lifts={lifts} settings={settings} />
 
@@ -111,7 +111,14 @@ export const Home = ({ logs, saveLog, settings, updateSetting, lifts }) => {
         />
         <Toggle label="Creatina 5g" sublabel="Re-saturación" checked={!!log.creatine} onChange={(v) => update('creatine', v)} />
         <NumInput label="Sueño" value={log.sleep} onChange={(v) => update('sleep', v)} unit="hrs" target="7+" step={0.5} />
-        <NumInput label="Pasos" value={log.steps} onChange={(v) => update('steps', v)} unit="" target="10K" step={500} />
+        <NumInput
+          label="Pasos"
+          value={log.steps}
+          onChange={(v) => update('steps', v)}
+          unit=""
+          target={`${(getStepsTarget(dayType, settings) / 1000).toFixed(0)}K+`}
+          step={500}
+        />
 
         <div className="flex items-center justify-between py-3 last:border-0">
           <div>

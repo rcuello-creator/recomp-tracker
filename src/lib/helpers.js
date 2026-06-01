@@ -7,9 +7,28 @@ import { SCORE_WEIGHTS, BMR_KATCH_MCARDLE, TEF_PERCENT } from '../data/constants
 
 export const today = () => new Date().toISOString().split('T')[0];
 
+// Defensive YYYY-MM-DD coercion — Settings tab values come back as ISO
+// timestamps ("2026-05-18T04:00:00.000Z") from Google Sheets when set via
+// `setValue(date)`. sheetToObjects strips Date objects to YYYY-MM-DD but
+// Settings live in a 2-col key/value layout where the date string survives.
+// Without this, `daysBetween` concatenates "...T04...Z" + "T00:00:00" → NaN.
+export const normalizeDate = (d) => {
+  if (!d) return null;
+  if (d instanceof Date) {
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString().split('T')[0];
+  }
+  const s = String(d);
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+};
+
 export const daysBetween = (d1, d2) => {
-  const date1 = new Date(d1 + 'T00:00:00');
-  const date2 = new Date(d2 + 'T00:00:00');
+  const n1 = normalizeDate(d1);
+  const n2 = normalizeDate(d2);
+  if (!n1 || !n2) return NaN;
+  const date1 = new Date(n1 + 'T00:00:00');
+  const date2 = new Date(n2 + 'T00:00:00');
   return Math.round((date2 - date1) / (1000 * 60 * 60 * 24));
 };
 
