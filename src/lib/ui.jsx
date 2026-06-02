@@ -1,4 +1,34 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+
+// ============================================================
+// Toast — transient confirmation pill (auto-dismiss)
+// ============================================================
+// `toast` shape: { action: 'updated' | 'inserted', ts }. Re-arms its timer
+// whenever `ts` changes so rapid successive saves each get the full duration.
+export const Toast = ({ toast, onDismiss, duration = 2200 }) => {
+  useEffect(() => {
+    if (!toast) return undefined;
+    const id = setTimeout(onDismiss, duration);
+    return () => clearTimeout(id);
+  }, [toast?.ts, onDismiss, duration]);
+
+  if (!toast) return null;
+  const isUpdate = toast.action === 'updated';
+  const cfg = isUpdate
+    ? { bg: 'bg-emerald-500', label: 'Día actualizado ✓' }
+    : { bg: 'bg-blue-500', label: 'Día registrado ✓' };
+
+  return (
+    <div className="fixed inset-x-0 bottom-24 z-50 flex justify-center px-4 pointer-events-none">
+      <div
+        onClick={onDismiss}
+        className={`pointer-events-auto ${cfg.bg} text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-lg animate-slide-up`}
+      >
+        {cfg.label}
+      </div>
+    </div>
+  );
+};
 
 // ============================================================
 // Card

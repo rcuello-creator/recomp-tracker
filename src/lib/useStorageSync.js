@@ -15,7 +15,11 @@ export function useStorageSync() {
   const [syncStatus, setSyncStatus] = useState('idle');
   const [lastSync, setLastSync] = useState(() => storage.getLastSync());
   const [queueLen, setQueueLen] = useState(() => storage.getQueue().length);
-  
+  // Transient confirmation surfaced after a saveLog. inserted = first row for
+  // the day, updated = day already had a row. Derived from local state (works
+  // offline / optimistically) rather than the batched syncBatch response.
+  const [toast, setToast] = useState(null);
+
   const syncing = useRef(false);
   
   useEffect(() => { storage.set('logs', logs); }, [logs]);
@@ -99,10 +103,16 @@ export function useStorageSync() {
   };
   
   const saveLog = (date, data) => {
-    const log = { ...data, date };
+    // updated vs inserted from local state — matches the upsert-by-date the
+    // Apps Script saveLog performs, but instantly and without a round-trip.
+    const action = logs[date] ? 'updated' : 'inserted';
+    const log = { ...data, date, updatedAt: new Date().toISOString() };
     setLogs(prev => ({ ...prev, [date]: log }));
     enqueue('saveLog', log);
+    setToast({ action, date, ts: Date.now() });
   };
+
+  const dismissToast = () => setToast(null);
   
   const saveScan = (scan) => {
     setScans(prev => [...prev, scan].sort((a, b) => a.date.localeCompare(b.date)));
@@ -132,5 +142,6 @@ export function useStorageSync() {
     logs, scans, lifts, dexas, settings,
     saveLog, saveScan, saveLift, saveDexa, updateSetting,
     syncStatus, lastSync, queueLen, forceSync,
+    toast, dismissToast,
   };
 }

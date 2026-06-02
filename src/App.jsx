@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStorageSync } from './lib/useStorageSync';
-import { SyncIndicator } from './lib/ui';
+import { SyncIndicator, Toast } from './lib/ui';
 import { Home } from './components/Home';
 import { MealsView } from './components/MealsView';
 import { WeekView } from './components/WeekView';
@@ -65,6 +65,8 @@ export default function App() {
           {tab === 'phase' && <PhaseView />}
         </div>
       </div>
+
+      <Toast toast={sync.toast} onDismiss={sync.dismissToast} />
 
       <FAB onClick={() => setQuickAddOpen(true)} label="Agregar comida" />
 
