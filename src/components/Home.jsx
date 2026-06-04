@@ -5,7 +5,7 @@ import { DailyRings } from './DailyRings';
 import { DayProgressCards } from './DayProgressCards';
 import { WeekProgressCard } from './WeekProgressCard';
 import { today, formatDateLong, formatTime } from '../lib/helpers';
-import { getDayType, getRingTargets, calcActualDeficit, getActiveCalTarget, getStepsTarget } from '../lib/deficit';
+import { getDayType, getRingTargets, calcActualDeficit, getActiveCalTarget, getStepsTarget, deficitRingColor } from '../lib/deficit';
 import { BMR_KATCH_MCARDLE } from '../data/constants';
 
 // ----------------------------------------------------------------------------
@@ -38,7 +38,7 @@ export const Home = ({ logs, saveLog, settings, updateSetting, lifts }) => {
   const liftToday = lifts.find(l => l.date === date);
 
   const rings = [
-    { key: 'deficit', value: Math.max(actualDeficit, 0), target: targets.deficit, color: RING_COLOR.deficit, label: 'Déficit', unit: 'cal' },
+    { key: 'deficit', value: Math.max(actualDeficit, 0), target: targets.deficit, color: deficitRingColor(actualDeficit, targets.deficit, settings), label: 'Déficit', unit: 'cal' },
     { key: 'protein', value: log.protein || 0,           target: targets.protein, color: RING_COLOR.protein, label: 'Proteína', unit: 'g' },
     { key: 'carbs',   value: log.carbs   || 0,           target: targets.carbs,   color: RING_COLOR.carbs,   label: 'Carbos',   unit: 'g' },
     { key: 'fat',     value: log.fat     || 0,           target: targets.fat,     color: RING_COLOR.fat,     label: 'Grasa',    unit: 'g' },

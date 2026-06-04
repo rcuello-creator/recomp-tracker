@@ -51,11 +51,51 @@ const pick = (settings, key, fallback) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
-export const getRingTargets = (date, dayType, settings = {}) => {
-  const phase = PHASES.find(p => date >= p.startDate && date <= p.endDate) || PHASES[0];
+// ----------------------------------------------------------------------------
+// Daily deficit target for a phase. Precedence:
+//   1. explicit Settings key `phase{id}_daily_deficit_target` (e.g. 540)
+//   2. phase weight goal: (baseline − end) lbs × 3500 / totalDays
+//   3. legacy deficit window midpoint (deficit_target_daily_low/high → 600)
+// Used by BOTH the Home deficit ring and the Phase card so they agree (the
+// ring was hardcoded to the 600 window midpoint — Bug A 2026-06-03).
+// ----------------------------------------------------------------------------
+export const getPhaseDailyTarget = (phase, settings = {}) => {
+  const explicit = pick(settings, `phase${phase.id}_daily_deficit_target`, null);
+  if (explicit != null) return Math.round(explicit);
+  const wBaseline = pick(settings, `weight_baseline_phase${phase.id}`, null);
+  const wEnd = pick(settings, `weight_target_phase${phase.id}_end`, null);
+  const totalDays = daysBetween(normalizeDate(phase.startDate), normalizeDate(phase.endDate)) + 1;
+  if (wBaseline != null && wEnd != null && wBaseline > wEnd && totalDays > 0) {
+    return Math.round(((wBaseline - wEnd) * 3500) / totalDays);
+  }
   const dlo = pick(settings, 'deficit_target_daily_low', 500);
   const dhi = pick(settings, 'deficit_target_daily_high', 700);
-  const deficit = Math.round((dlo + dhi) / 2);
+  return Math.round((dlo + dhi) / 2);
+};
+
+// ----------------------------------------------------------------------------
+// Deficit ring color by health zone (Bug C 2026-06-03). The ring was a fixed
+// Apple-"Move" red, so hitting target read as an alarm. Zones:
+//   < target          → verde claro  (acercándose)
+//   target..healthyMax → verde fuerte (óptimo)
+//   healthyMax..catabolic → amarillo (agresivo)
+//   > catabolic        → rojo        (catabólico)
+// Settings overrides: healthy_max_daily (750), deficit_catabolic_max (900).
+// ----------------------------------------------------------------------------
+const CATABOLIC_MAX = 900;
+export const deficitRingColor = (value, target, settings = {}) => {
+  const healthyMax = pick(settings, 'healthy_max_daily', HEALTHY_MAX_DAILY);
+  const catabolic = pick(settings, 'deficit_catabolic_max', CATABOLIC_MAX);
+  const v = Math.max(value || 0, 0);
+  if (v > catabolic) return '#ef4444';   // rojo
+  if (v > healthyMax) return '#f59e0b';  // amarillo
+  if (v >= target) return '#10b981';     // verde fuerte (óptimo)
+  return '#86efac';                      // verde claro
+};
+
+export const getRingTargets = (date, dayType, settings = {}) => {
+  const phase = PHASES.find(p => date >= p.startDate && date <= p.endDate) || PHASES[0];
+  const deficit = getPhaseDailyTarget(phase, settings);
   const dk = dayKey(dayType);
 
   // Phase-derived defaults (legacy path)
@@ -133,16 +173,12 @@ export const getPhaseProgress = (phase, currentDate, logs = {}, bmr, settings = 
   // 3500 = 18,900. Falls back to deficit window if phase keys are absent.
   const wBaseline = pick(settings, `weight_baseline_phase${phase.id}`, null);
   const wEnd = pick(settings, `weight_target_phase${phase.id}_end`, null);
+  // Daily target via shared helper so the Phase card and the Home ring agree.
+  const targetDaily = getPhaseDailyTarget(phase, settings);
   let totalTargetDeficit;
-  let targetDaily;
   if (wBaseline != null && wEnd != null && wBaseline > wEnd) {
-    const lbsToLose = wBaseline - wEnd;
-    totalTargetDeficit = lbsToLose * 3500;
-    targetDaily = totalDays > 0 ? Math.round(totalTargetDeficit / totalDays) : 0;
+    totalTargetDeficit = (wBaseline - wEnd) * 3500;
   } else {
-    const dlo = pick(settings, 'deficit_target_daily_low', 500);
-    const dhi = pick(settings, 'deficit_target_daily_high', 700);
-    targetDaily = Math.round((dlo + dhi) / 2);
     totalTargetDeficit = targetDaily * totalDays;
   }
   const deficitPct = totalTargetDeficit > 0 ? cumulativeDeficit / totalTargetDeficit : 0;
